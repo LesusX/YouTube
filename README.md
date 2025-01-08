@@ -1,2 +1,4 @@
 # YouTube
-Collection of YouTube tutorials and resources
+Repository for tutorials and projects I show on YouTube/Reddit.
+
+(More to be added later)
