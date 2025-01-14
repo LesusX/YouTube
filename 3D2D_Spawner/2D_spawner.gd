@@ -48,7 +48,7 @@ func spawn_object():
 		if throw_multiple_directions:
 			directions_to_use = throw_directions
 		elif use_random_direction:
-			directions_to_use = [Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()]
+			directions_to_use = [Vector2(randf_range(-250, 250), randf_range(-250, 250))] #Values -250 to 250 work well for most cases. Test different values if needed.
 		else:
 			directions_to_use = [throw_direction]
 
