@@ -1,18 +1,18 @@
-# 3D Spawner script V1.0.
+# 3D Spawner script V1.1.
 # It allows the spawner to spawn either one or multiple objects in a single or multiple positions.
-# A basic spawner scene to which this script will be attached, should be something like a Node3D with a Timer node attached in it. Optionally add a mesh instance for visual representation.
+# A basic spawner scene to which this script will be attached should be something like a Node3D with a Timer node attached in it. Optionally add a mesh instance for visual representation.
 # Use the Start/Stop functions to control the spawner.
 
 extends Node3D
 
 @export var spawn_objects: Array[PackedScene]           ## Array with scenes that can be used
-@export var random_selection: bool = false              ## Spawn random objects from the Array. If its not turned on the first object in the Array will be spawned instead.
-@export var random_position: bool = true                ## Spawn object/s in a random place arround the spawner's position. 
+@export var random_selection: bool = false              ## Spawn random objects from the Array. If it's not turned on, the first object in the Array will be spawned instead.
+@export var random_position: bool = true                ## Spawn object/s in a random place around the spawner's position. 
 @export var random_spawn_radius: float = 25.0           ## Radius in meters for random spawning.
 @export var spawn_height_variation: float = 0.0         ## Vertical variation for spawn position. Set to 0 if a random y position is not desired. NOTE: Setting very high values may cause rigid bodies to fall with great speed and avoid collisions.
 @export var random_rotation: bool = false               ## Enable random rotation on spawn.
 
-@export var spawn_count: int = 1                        ## Number of objects to spawn per cycle. The cycle is defined in the spawn_frequency
+@export var spawn_count: int = 1                        ## Number of objects to spawn per cycle. The cycle is defined in the spawn_interval
 @export var max_instances: int = -1                     ## Max instances allowed. Set a limit for the number of objects that can be spawned. Useful for efficiency. Set -1 for unlimited.
 
 @export var spawn_interval: float = 1.0                 ## Time interval between spawns in seconds. Ex. Spawn x amount of objects (defined by spawn_count) every 10 seconds.
@@ -23,6 +23,8 @@ extends Node3D
 @export var throw_force: float = 10.0                   ## Force applied to thrown objects.
 @export var use_random_direction: bool = false          ## Toggle if throw direction should be random or specific.
 @export var throw_direction: Vector3 = Vector3.LEFT     ## Direction in which objects will be thrown if not random.
+@export var throw_multiple_directions: bool = false     ## Toggle to allow throwing in multiple directions per spawn.
+@export var throw_directions: Array[Vector3] = [Vector3.LEFT, Vector3.RIGHT, Vector3.MODEL_REAR, Vector3.MODEL_FRONT] ## Directions for multi-throw. By default all 4 directions are added. Add more or remove directions as needed.
 
 @export_group("Despawn")
 @export var should_despawn: bool = false                ## Toggle if spawned objects should despawn.
@@ -75,10 +77,12 @@ func spawn_object():
 			if use_random_direction:
 				direction = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized()
 			else:
-				direction = throw_direction
+				if throw_multiple_directions and throw_directions.size() > 0:
+					direction = throw_directions[randi() % throw_directions.size()]
+				else:
+					direction = throw_direction
 				
 			if object_instance is PhysicsBody3D:  # Check if the object can react to physics
-				# Ensure the object is in the scene tree before applying physics
 				await get_tree().physics_frame  # Wait for the next physics frame
 				object_instance.apply_impulse(direction * throw_force)
 			else:
