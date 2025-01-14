@@ -3,6 +3,8 @@
 # A basic spawner scene to which this script will be attached should be something like a Node3D with a Timer node attached in it. Optionally add a mesh instance for visual representation.
 # Use the Start/Stop functions to control the spawner.
 
+# TODO: Allow multidirectional throws to happen at the same time instead of one side at a time.
+
 extends Node3D
 
 @export var spawn_objects: Array[PackedScene]           ## Array with scenes that can be used
