@@ -14,8 +14,6 @@ var mouse_sensitivity = 0.002
 var standing_on_rigid_body:bool = false
 var strength_multiplier:float = 1.4
 @onready var ground_check: ShapeCast3D = $ground_check
-# Usually small bodies directly touching the player
-var bodies_in_push_area = []
 
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
