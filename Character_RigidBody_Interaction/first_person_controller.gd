@@ -189,6 +189,8 @@ func push_rigid_body() -> void:
 					var applied_force_og = player_strength * strength_multiplier if body_mass >= player_strength * strength_multiplier else body_mass
 					var distance_restricted = (col_position - global_position).length()
 					var distance_factor_restricted = clamp(distance_restricted / 2.0, 0.4, 1.0)
+					# If the side we push against is blocked allow a small force to be applied so that the pushed body can be moved arround a bit. 
+					# For example if you want to allign the pushed body flat against the conected one.
 					col_collider.apply_impulse(-col.get_normal().normalized() * applied_force_og * 0.50 * distance_factor_restricted, col_position - col_collider.global_position)
 					return
 					
