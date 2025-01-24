@@ -11,7 +11,6 @@ var jump_speed = 8
 var mouse_sensitivity = 0.002
 
 @export var player_strength:float = 100
-var standing_on_rigid_body:bool = false
 var strength_multiplier:float = 1.4
 @onready var ground_check: ShapeCast3D = $ground_check
 
