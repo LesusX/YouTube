@@ -2,9 +2,6 @@
 // This shader can be added in a plane mesh. For a more detailed ocean, increase the width and depth subdivison.
 // Note: On larger planes ex. 500x500, increasing the subdivision above 1000 comes at great performance cost
 
-// Feel free to use this code in any way you like. 
-// Sincerely LesusX
-
 shader_type spatial;
 
 // Set render modes: always draw depth and disable backface culling
