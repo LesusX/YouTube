@@ -1,6 +1,7 @@
 // The following shader is used in order to simulate a simple ocean using Gerstner waves.
 // This shader can be added in a plane mesh. For a more detailed ocean, increase the width and depth subdivison.
-// Note: On larger planes ex. 500x500, increasing the subdivision above 1000 comes at great performance cost
+// Note 1: On larger planes ex. 500x500, increasing the subdivision above 1000 comes at great performance cost
+// Note 2: Special thanks to @ninetailsrabbit for fixing a caustics projection issue!
 
 shader_type spatial;
 
@@ -72,10 +73,15 @@ uniform vec2 uv_speed_text_b = vec2(0.15, 0.1);
 uniform float normal_strength = 1.0;
 uniform float uv_sampler_scale = 0.3;
 uniform float blend_factor = 0.28;
+uniform float perturbation_strength = 1.0; // Adjust this value to tile/de-tile the oceans surface.
+uniform float perturbation_time = 0.3; // // Offset perturbation_time for patern variation
 uniform sampler2D normalmap_a;
 uniform sampler2D normalmap_b;
 uniform sampler2D uv_sampler;
 uniform sampler2DArray caustic_sampler : hint_default_black;
+
+uniform float num_caustic_layers = 16.0; // <<< IMPORTANT: DOUBLE CHECK THIS against your Texture2DArray's actual slices!
+uniform float caustic_distortion_strength = 0.001; // Keep this value within a range of 0.001 to 0.009
 
 // Fresnel function to calculate the reflection/refraction effect
 float fresnel(float amount, vec3 normal, vec3 view) {
@@ -240,27 +246,73 @@ void vertex() {
     inv_mvp = inverse(PROJECTION_MATRIX * MODELVIEW_MATRIX);
 }
 
+
+// 2D Random hash function
+float random(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+// Smooth noise function
+float smooth_noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(random(i + vec2(0.0, 0.0)), random(i + vec2(1.0, 0.0)), u.x),
+        mix(random(i + vec2(0.0, 1.0)), random(i + vec2(1.0, 1.0)), u.x),
+        u.y
+    );
+}
+
+// Layered noise for detiling
+float layered_noise(vec2 p, float scale) {
+    float n = 0.0;
+    n += smooth_noise(p * scale) * 0.5;
+    n += smooth_noise(p * scale * 2.0) * 0.25;
+    n += smooth_noise(p * scale * 4.0) * 0.125;
+    return n;
+}
+
+// Perturb UV coordinates for detiling
+vec2 perturb_uv(vec2 uv, vec2 world_pos, float time, float strength) {
+    // Use world position to generate unique noise patterns
+    vec2 noise_offset = vec2(
+        layered_noise(world_pos * 0.3 + time * 0.06, 1.0),
+        layered_noise(world_pos * 0.3 + time * 0.06 + vec2(10.0), 1.0)
+    );
+    // Apply subtle distortion to UVs
+    return uv + noise_offset * strength;
+}
+
+
 // Fragment shader function
 void fragment() {
     // Calculate UV coordinates based on world position
     vec2 uv = world_position.xz;
+
     // Sample UV offset texture
     vec2 uv_offset = texture(uv_sampler, uv * uv_sampler_scale).rg;
-    
-    // Calculate animated UV coordinates for normal maps
-    vec2 animated_uv_a = (uv + uv_speed_text_a * TIME + uv_offset) * uv_scale_text_a;
-    vec2 animated_uv_b = (uv + uv_speed_text_b * TIME + uv_offset) * uv_scale_text_b;
+
+    // Calculate base UV coordinates for normal maps
+    vec2 base_uv_a = (uv + uv_speed_text_a * TIME + uv_offset) * uv_scale_text_a;
+    vec2 base_uv_b = (uv + uv_speed_text_b * TIME + uv_offset) * uv_scale_text_b;
+
+    // Apply noise-based perturbation to UVs
+    vec2 animated_uv_a = perturb_uv(base_uv_a, world_position.xz, TIME, perturbation_strength);
+    vec2 animated_uv_b = perturb_uv(base_uv_b, world_position.xz, TIME + 0.0, perturbation_time);
+
     // Sample normal maps
     vec3 normal_sample_a = texture(normalmap_a, animated_uv_a).rgb;
     vec3 normal_sample_b = texture(normalmap_b, animated_uv_b).rgb;
-    
+
     // Normalize normal samples and combine them
     normal_sample_a = normalize(normal_sample_a * 2.0 - 1.0);
     normal_sample_b = normalize(normal_sample_b * 2.0 - 1.0);
     vec3 combined_normal = normalize(mix(normal_sample_a, normal_sample_b, blend_factor));
-    
+
     // Perturb the normal using the TBN matrix
     vec3 perturbed_normal = normalize(tbn_matrix * (combined_normal * normal_strength));
+
     // Sample depth texture
     float depth_raw = texture(DEPTH_TEXTURE, SCREEN_UV).r;
     float depth = PROJECTION_MATRIX[3][2] / (depth_raw + PROJECTION_MATRIX[2][2]);
@@ -287,14 +339,20 @@ void fragment() {
     float z_pos = edge(FRAGCOORD.z);
     float z_dif = z_depth - z_pos;
     
-    // Calculate caustic effect
-    vec4 caustic_screenPos = vec4(SCREEN_UV * 2.0 - 1.0, depth_raw, 1.0);
-    vec4 caustic_localPos = inv_mvp * caustic_screenPos;
-    caustic_localPos = vec4(caustic_localPos.xyz / caustic_localPos.w, caustic_localPos.w);
-    
-    vec2 caustic_Uv = caustic_localPos.xz / vec2(1024.0) + 0.5;
-    vec4 caustic_color = texture(caustic_sampler, vec3(caustic_Uv * 660.0, mod(TIME * 26.0, 15.0)));
-    color *= 1.0 + pow(caustic_color.r, 1.50) * (1.0 - depth_blend) * 6.0;
+	// Calculate caustic effect
+	vec4 caustic_screenPos = vec4(SCREEN_UV * 2.0 - 1.0, depth_raw, 1.0);
+	vec4 caustic_localPos = inv_mvp * caustic_screenPos;
+	caustic_localPos = vec4(caustic_localPos.xyz / caustic_localPos.w, caustic_localPos.w);
+	 
+	vec2 caustic_Uv = caustic_localPos.xz / vec2(1024.0) + 0.5;
+	caustic_Uv += perturbed_normal.xz * caustic_distortion_strength; 
+
+	float caustic_layer_index = floor(mod(TIME * 26.0, num_caustic_layers)); // Use floor for integer index
+
+	vec4 caustic_color = texture(caustic_sampler, vec3(caustic_Uv * 660.0, caustic_layer_index));
+	float caustic_intensity_multiplier = (1.0 - depth_blend_power) * 6.0; 
+
+	color *= 1.0 + pow(caustic_color.r, 1.50) * caustic_intensity_multiplier;
     
     // Calculate fresnel effect
     float fresnel = fresnel(5.0, NORMAL, VIEW);
